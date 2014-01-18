@@ -1,6 +1,8 @@
 # (Howto) Walz a Hard Drive Spindle Motor
 
-By [rik](/user/1069 "rik") @ November 10, 2008
+[View Original](http://letsmakerobots.com/node/2898)
+
+By [rik](http://letsmakerobots.com/node/1836 "rik") @ November 10, 2008
 
 an example of a driver for a brushless DC motor without microcontroller
 

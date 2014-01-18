@@ -33,16 +33,16 @@ motor will still spin at the same speed as it would at 12V (because it's
 being driven by a frequency) but has very low torque. It will not
 self-start at 5V. Current consumptions are: 
 
-	12V  10rps  (600rpm)  200mA
-	12V  50rps  (3000rpm)  110mA
-	5V  10rps  (600rpm)    40mA
-	5V  50rps  (3000rpm)    20mA
+	12V 10rps (600rpm) 200mA
+	12V 50rps (3000rpm) 110mA
+	5V 10rps (600rpm) 40mA
+	5V 50rps (3000rpm) 20mA
  
  The motor should be mounted on a heatsinking chassis to help keep it
 cool if run for extended periods. The FETs (rated at 0.7A to 1.1A) will
 normally run cool
 
- **Download  [HDD motor
+ **Download [HDD motor
 driver](http://home.clear.net.nz/pages/joecolquitt/hddmotor.zip)**
 
 
@@ -53,68 +53,68 @@ driver](http://home.clear.net.nz/pages/joecolquitt/hddmotor.zip)**
 
 
 ```asm
- ;hddmotor.asm - driver for 3-coil HDD motor
- ;13/12/2000
- 
- ;Look for external clock on a3 and change FET-driving bit pattern
- 
- clock    equ porta.3    ;i/p clock
- 
- ;EEPROM bit patterns
+;hddmotor.asm - driver for 3-coil HDD motor
+;13/12/2000
 
- ee1      dbee  24h   ;100 100
- ee2      dbee  36h   ;110 110
- ee3      dbee  12h   ;010 010
- ee4      dbee  1bh   ;011 011
- ee5      dbee  09h   ;001 001
- ee6      dbee  2dh   ;101 101
- 
- index    rb    ;RAM byte for counter
- 
- setup
+;Look for external clock on a3 and change FET-driving bit pattern
 
- movlw  08h
- tris  porta
- movlw  00h
- tris  portb
- movlw  80h
- option
- clrf  index
- movlw  24h
- movwf  portb
- 
- clocklo    ;main loop
- 
- btfss  clock       ;wait for ext clock to go high
- goto  clocklo
- 
- change    ;
- 
- movf  index,w    ;get next bit pattern from EE
- movwf  eeadr
- call  readee
- movwf  portb
- 
- incf  index,f
- movlw  06          ;loop for 6 EE locations
- xorwf  index,w
- btfss  zero
- goto  clockhi
- clrf  index
- 
- clockhi    ;
- 
- btfsc  clock       ;wait for clock low
- goto  clockhi
- goto  clocklo     ;next clock, next pattern
- 
- readee    ;get next pattern
- 
- bsf  rp0
- bsf  rd
- bcf  rp0
- movf  eedata,w
- return
+clock equ porta.3 ;i/p clock
+
+;EEPROM bit patterns
+
+ee1 dbee 24h ;100 100
+ee2 dbee 36h ;110 110
+ee3 dbee 12h ;010 010
+ee4 dbee 1bh ;011 011
+ee5 dbee 09h ;001 001
+ee6 dbee 2dh ;101 101
+
+index rb ;RAM byte for counter
+
+setup
+
+movlw 08h
+tris porta
+movlw 00h
+tris portb
+movlw 80h
+option
+clrf index
+movlw 24h
+movwf portb
+
+clocklo ;main loop
+
+btfss clock ;wait for ext clock to go high
+goto clocklo
+
+change ;
+
+movf index,w ;get next bit pattern from EE
+movwf eeadr
+call readee
+movwf portb
+
+incf index,f
+movlw 06 ;loop for 6 EE locations
+xorwf index,w
+btfss zero
+goto clockhi
+clrf index
+
+clockhi ;
+
+btfsc clock  ;wait for clock low
+goto clockhi
+goto clocklo ;next clock, next pattern
+
+readee ;get next pattern
+
+bsf rp0
+bsf rd
+bcf rp0
+movf eedata,w
+return
 ```
 
 
