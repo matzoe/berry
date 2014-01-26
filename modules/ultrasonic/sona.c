@@ -5,7 +5,8 @@
 #include <signal.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/time.h>
+#include <time.h>
+#include <signal.h>
 
 #define ROUNDS 42
 #define ROUNDS_LIMIT 100
@@ -13,36 +14,68 @@
 #define ECHO_PIN1    27
 #define TRIGGER_PIN2 18
 #define ECHO_PIN2    22
-#define TIMEOUT 999 /* any value other than LOW or HIGH */
 
+static int deadline = 0;
 int partition(int *a, int p, int r);
 int random_partition(int *a, int p, int r);
 int random_select(int *a, int p, int r, int i);
+int median(int *a, int l) {
+  return random_select(a, 0, l, (l + 1) / 2);
+}
 
-int waitforpin(int pin, int level, int timeout) {
-  struct timeval now, start;
-  int done;
-  long micros;
-  gettimeofday(&start, NULL);
-  micros = 0;
-  done = 0;
-  while (!done) {
-    gettimeofday(&now, NULL);
-    if (now.tv_sec > start.tv_sec) {
-      micros = 1000000L;
+int set_alarm(long timeout, void(*handler)(int)) {
+  timer_t timer;
+  struct itimerspec nv = {0};
+  struct itimerspec ov = {0};
+  nv.it_value.tv_sec = 0;
+  nv.it_value.tv_nsec = 1000L * timeout;
+  struct sigaction action = {0};
+  action.sa_handler = *handler;
+  if (sigaction (SIGALRM, &action, NULL) == -1) {
+    perror("sigaction");
+  }
+  if (timer_create(CLOCK_MONOTONIC, NULL, &timer) == -1) {
+    perror("timer_create");
+  }
+  if (timer_settime(timer, 0, &nv, &ov) == -1) {
+    perror("timer_settime");
+  }
+}
+
+void set_deadline(int unused) {
+  deadline = ( 1 == 1 );
+}
+
+int waitforpin(int pin, int bit, long timeout) {
+  deadline = ( 1 == 0 );
+  struct timespec start, now;
+  if (clock_gettime (CLOCK_MONOTONIC, &start) == -1) {
+    perror ("clock_gettime");
+  }
+  set_alarm(timeout, set_deadline);
+  while (digitalRead(pin) != bit) {
+    if (clock_gettime (CLOCK_MONOTONIC, &now) == -1) {
+      perror ("clock_gettime");
     }
-    else {
-      micros = 0;
-    }
-    micros = micros + (now.tv_usec - start.tv_usec);
-    if (micros > timeout) {
-      done = 1;
-    }
-    if (digitalRead(pin) == level) {
-      done = 1;
+    if (deadline == ( 1 == 1)) {
+      return -1;
     }
   }
-  return micros;
+  return ((long)(now.tv_sec - start.tv_sec))*1000000L + ((long)(now.tv_nsec - start.tv_nsec))/1000;
+}
+
+void fire(int pin) {
+  struct timespec req;
+  req.tv_sec = 0;
+  req.tv_nsec = 10000L;
+  digitalWrite(pin, LOW);
+  usleep(5000L);
+  digitalWrite(pin, HIGH);
+  errno = 0;
+  if (nanosleep(&req, NULL) == -1) {
+    perror("nanosleep");
+  }
+  digitalWrite(pin, LOW);
 }
 
 int readSensor(int trig, int echo) {
@@ -53,31 +86,22 @@ int readSensor(int trig, int echo) {
   int count = 0;
   int i = 0;
   while (1) {
-    /* trigger reading */
-    digitalWrite(trig, HIGH);
-    waitforpin(echo, TIMEOUT, 10); /* wait 10 microseconds */
-    digitalWrite(trig, LOW);
-
-    /* wait for reading to start */
-    waitforpin(echo, HIGH, 5000); /* 5 ms timeout */
-
-    if (digitalRead(echo)  == HIGH) {
-      pulsewidth = waitforpin(echo, LOW, 60000L); /* 60 ms timeout */
-
-      if (digitalRead(echo) == LOW) {
-        /* valid reading code */
-        // printf("echo at %d micros\n", pulsewidth);
+    fire(trig);
+    if (waitforpin(echo, HIGH, 5000L) != -1) {
+      pulsewidth = waitforpin(echo, LOW, 60000L);
+      if (pulsewidth != -1) {
         elapse[count] = pulsewidth;
         ++count;
-      }
-      else {
-        /* no object detected code */
+      } else {
+#ifdef DEBUG
         printf("echo timed out\n");
+#endif
       }
     }
     else {
-      /* sensor not firing code */
+#ifdef DEBUG
       printf("sensor didn't fire\n");
+#endif
     }
     ++i;
     if (i > ROUNDS_LIMIT || (i > ROUNDS && count > ROUNDS / 2)) {
@@ -85,7 +109,7 @@ int readSensor(int trig, int echo) {
     }
   }
   if (count > 0) {
-    return random_select(elapse, 0, count, (count + 1) / 2);
+    return median(elapse, count);
   }
   return -1;
 }
@@ -98,6 +122,8 @@ int main (int argc, char const *argv[]) {
   int cost = readSensor(TRIGGER_PIN1, ECHO_PIN1);
   if (cost > 0) {
     printf("Time: %dus\tDistance: %.1fcm\n", cost, ((double)cost) * 343 / 2 / 10000);
+  } else {
+    fprintf(stderr, "Failed to fire sona.\n");
   }
   // cost = readSensor(TRIGGER_PIN2, ECHO_PIN2);
   // if (cost > 0) {
@@ -124,7 +150,6 @@ int partition(int *a, int p, int r) {
 
 int random_partition(int *a, int p, int r) {
   int i = p + (int)((r - p + 1) * rand() / (RAND_MAX + 1.0));
-  // exhange a[r] <-> a[i]
   int t = a[i];
   a[i] = a[r];
   a[r] = t;
